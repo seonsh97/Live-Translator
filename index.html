@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1417">
+<title>Call Captions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Noto+Sans+KR:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-screen app — status bar on top, scrolling caption feed, thumb-reach control dock at the bottom */
+:root {
+  --bg: #0f1417;
+  --surface: #182025;
+  --line: #26323a;
+  --fg: #e8eef1;
+  --muted: #8a9aa4;
+  --accent: #4fd1b5;
+  --live: #ff6b5a;
+  --ko: #ffe08a;
+  --en-font: "IBM Plex Sans", system-ui, sans-serif;
+  --ko-font: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --size: 20px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f4f7f8; --surface: #ffffff; --line: #d8e0e4; --fg: #13202a;
+    --muted: #5d6e78; --accent: #0f8f77; --live: #d63c2b; --ko: #8a5a00;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f4f7f8; --surface: #ffffff; --line: #d8e0e4; --fg: #13202a;
+  --muted: #5d6e78; --accent: #0f8f77; --live: #d63c2b; --ko: #8a5a00;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--en-font);
+  display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.on { background: var(--live); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+#status { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header select, header button {
+  font: 600 13px var(--en-font); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+}
+#feed {
+  flex: 1; overflow-y: auto; padding: 12px 16px 24px;
+  display: flex; flex-direction: column; gap: 14px;
+  font-size: var(--size);
+}
+.line { display: flex; flex-direction: column; gap: 4px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.line:last-child { border-bottom: 0; }
+.en { line-height: 1.4; }
+.en .w { cursor: pointer; border-radius: 4px; }
+.en .w:active, .en .w.sel { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.ko { font-family: var(--ko-font); color: var(--ko); line-height: 1.5; font-weight: 600; }
+.ko.pending { color: var(--muted); font-weight: 400; }
+.hide-en .line .en { display: none; }
+#interim .en, #interim .ko { opacity: .6; }
+#interim:empty { display: none; }
+.time { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.empty { margin: auto 0; color: var(--muted); font-size: 15px; line-height: 1.7; max-width: 34em; }
+.empty b { color: var(--fg); }
+.notice { margin: 0 16px 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--live); color: var(--fg); font-size: 14px; line-height: 1.5; }
+#jump { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); background: var(--accent); color: var(--bg); border: 0; border-radius: 999px; padding: 8px 14px; font: 600 13px var(--ko-font); }
+.dock {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line); background: var(--surface);
+}
+.dock button { font: 600 14px var(--ko-font); color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 12px; height: 48px; min-width: 48px; padding: 0 12px; }
+#mic { flex: 1; background: var(--accent); color: var(--bg); border: 0; font-size: 17px; }
+#mic.on { background: var(--live); color: #fff; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--surface); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -10px 30px rgb(0 0 0 / .35);
+}
+#sheet h2 { margin: 0 0 4px; font-size: 24px; }
+#sheet .ko { font-size: 20px; }
+#sheet .dict { margin-top: 8px; font-family: var(--ko-font); font-size: 15px; color: var(--muted); line-height: 1.6; }
+#sheet .dict b { color: var(--fg); font-weight: 600; }
+#sheet .close { position: absolute; top: 10px; right: 12px; background: none; border: 0; color: var(--muted); font-size: 26px; }
+@media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <span id="status">대기 중</span>
+  <select id="lang" aria-label="Accent">
+    <option value="en-US">EN-US</option>
+    <option value="en-GB">EN-GB</option>
+    <option value="en-AU">EN-AU</option>
+    <option value="en-IN">EN-IN</option>
+  </select>
+  <button id="toggleEn" aria-pressed="true" title="영어 원문 표시">EN</button>
+</header>
+<div id="notices"></div>
+<main id="feed" aria-live="polite">
+  <p class="empty" id="empty">
+    <b>시작</b>을 누르면 들리는 영어를 받아 적고 바로 아래에 한국어 번역을 띄웁니다.<br>
+    못 알아들은 단어는 <b>탭</b>하면 뜻이 나옵니다.<br>
+    통화는 <b>스피커폰</b>이나 PC로 하고, 이 폰을 가까이 두세요.
+  </p>
+  <div class="line" id="interim"></div>
+</main>
+<button id="jump" hidden>새 문장 ↓</button>
+<div class="dock">
+  <button id="smaller" aria-label="글자 작게">가−</button>
+  <button id="bigger" aria-label="글자 크게">가+</button>
+  <button id="mic">시작</button>
+  <button id="copy">복사</button>
+  <button id="clear">지우기</button>
+</div>
+<div id="sheet" hidden>
+  <button class="close" id="sheetClose" aria-label="닫기">×</button>
+  <h2 id="sheetWord"></h2>
+  <div class="ko" id="sheetKo"></div>
+  <div class="dict" id="sheetDict"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const feed = $('feed'), interimEl = $('interim'), statusEl = $('status'), dot = $('dot');
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const isAndroid = /Android/i.test(navigator.userAgent);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+// ---------- settings ----------
+let size = store.get('size', 20);
+let showEn = store.get('showEn', true);
+$('lang').value = store.get('lang', 'en-US');
+function applySettings() {
+  document.documentElement.style.setProperty('--size', size + 'px');
+  feed.classList.toggle('hide-en', !showEn);
+  $('toggleEn').setAttribute('aria-pressed', showEn);
+  $('toggleEn').style.opacity = showEn ? 1 : .5;
+}
+applySettings();
+$('smaller').onclick = () => { size = Math.max(14, size - 2); store.set('size', size); applySettings(); };
+$('bigger').onclick = () => { size = Math.min(40, size + 2); store.set('size', size); applySettings(); };
+$('toggleEn').onclick = () => { showEn = !showEn; store.set('showEn', showEn); applySettings(); };
+$('lang').onchange = () => { store.set('lang', $('lang').value); if (running) { rec.abort(); } };
+
+// ---------- notices ----------
+function notice(html) { const d = document.createElement('div'); d.className = 'notice'; d.innerHTML = html; $('notices').appendChild(d); }
+if (!SR) notice('이 브라우저는 음성 인식을 지원하지 않습니다. <b>안드로이드는 Chrome</b>, 아이폰은 <b>Safari</b>로 열어주세요.');
+if (!window.isSecureContext) notice('마이크는 <b>https://</b> 주소에서만 켜집니다. 파일을 웹에 올린 주소로 열어주세요.');
+
+// ---------- translation (Google Translate public endpoint) ----------
+const cache = new Map();
+async function translate(text, withDict = false) {
+  const key = (withDict ? 'd:' : '') + text;
+  if (cache.has(key)) return cache.get(key);
+  const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t' + (withDict ? '&dt=bd' : '') + '&q=' + encodeURIComponent(text);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  const out = { text: (j[0] || []).map(s => s[0]).join(''), dict: withDict && Array.isArray(j[1]) ? j[1].map(e => ({ pos: e[0], terms: (e[1] || []).slice(0, 6) })) : [] };
+  cache.set(key, out);
+  return out;
+}
+
+// ---------- feed ----------
+let autoScroll = true;
+feed.addEventListener('scroll', () => {
+  autoScroll = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 60;
+  if (autoScroll) $('jump').hidden = true;
+});
+$('jump').onclick = () => { feed.scrollTop = feed.scrollHeight; };
+function stick() { if (autoScroll) feed.scrollTop = feed.scrollHeight; else $('jump').hidden = false; }
+
+function enHTML(text) {
+  return text.split(/(\s+)/).map(t => /\S/.test(t)
+    ? `<span class="w">${t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</span>` : t).join('');
+}
+const transcript = [];
+function addFinal(text) {
+  if (!text) return;
+  $('empty')?.remove();
+  const now = new Date();
+  const el = document.createElement('div');
+  el.className = 'line';
+  el.innerHTML = `<span class="time">${now.toTimeString().slice(0, 8)}</span><div class="en">${enHTML(text)}</div><div class="ko pending">번역 중…</div>`;
+  feed.insertBefore(el, interimEl);
+  const entry = { t: now, en: text, ko: '' };
+  transcript.push(entry);
+  stick();
+  translate(text).then(r => {
+    const ko = el.querySelector('.ko'); ko.textContent = r.text; ko.classList.remove('pending'); entry.ko = r.text; stick();
+  }).catch(() => { el.querySelector('.ko').textContent = '(번역 실패 — 인터넷 연결 확인)'; });
+}
+
+let interimSeq = 0, interimTimer = null;
+function setInterim(text) {
+  if (!text) { interimEl.innerHTML = ''; return; }
+  $('empty')?.remove();
+  const koOld = interimEl.querySelector('.ko')?.textContent || '';
+  interimEl.innerHTML = `<div class="en">${enHTML(text)}</div><div class="ko">${koOld}</div>`;
+  stick();
+  clearTimeout(interimTimer);
+  const seq = ++interimSeq;
+  interimTimer = setTimeout(() => {
+    translate(text).then(r => {
+      if (seq !== interimSeq) return;
+      const ko = interimEl.querySelector('.ko'); if (ko) { ko.textContent = r.text; stick(); }
+    }).catch(() => {});
+  }, 450);
+}
+
+// ---------- word lookup ----------
+feed.addEventListener('click', async e => {
+  const w = e.target.closest('.w'); if (!w) return;
+  document.querySelectorAll('.w.sel').forEach(x => x.classList.remove('sel'));
+  w.classList.add('sel');
+  const word = w.textContent.replace(/^[^\w']+|[^\w']+$/g, '');
+  if (!word) return;
+  $('sheetWord').textContent = word;
+  $('sheetKo').textContent = '찾는 중…';
+  $('sheetDict').innerHTML = '';
+  $('sheet').hidden = false;
+  try {
+    const r = await translate(word.toLowerCase(), true);
+    if ($('sheetWord').textContent !== word) return;
+    $('sheetKo').textContent = r.text;
+    $('sheetDict').innerHTML = r.dict.map(d => `<div><b>${d.pos}</b> · ${d.terms.join(', ')}</div>`).join('');
+  } catch { $('sheetKo').textContent = '(찾기 실패)'; }
+});
+$('sheetClose').onclick = () => { $('sheet').hidden = true; document.querySelectorAll('.w.sel').forEach(x => x.classList.remove('sel')); };
+
+// ---------- speech recognition ----------
+let rec = null, running = false, wakeLock = null;
+function setStatus(t, on) { statusEl.textContent = t; dot.classList.toggle('on', !!on); }
+
+function startRec() {
+  rec = new SR();
+  rec.lang = $('lang').value;
+  rec.interimResults = true;
+  // Android Chrome repeats earlier results in continuous mode, so take one utterance at a time there and restart.
+  rec.continuous = !isAndroid;
+  rec.maxAlternatives = 1;
+  rec.onstart = () => setStatus('듣는 중 · ' + rec.lang, true);
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) { interimSeq++; setInterim(''); addFinal(r[0].transcript.trim()); }
+      else interim += r[0].transcript;
+    }
+    setInterim(interim.trim());
+  };
+  rec.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      stop(); notice('마이크 권한이 거부됐습니다. 주소창 왼쪽 자물쇠 → 권한 → <b>마이크 허용</b> 후 다시 시작하세요.');
+    } else if (e.error === 'audio-capture') {
+      stop(); notice('마이크를 쓸 수 없습니다. 이 폰으로 통화 중이면 통화 앱이 마이크를 잡고 있는 것입니다. 통화는 다른 기기/스피커로 하세요.');
+    }
+  };
+  rec.onend = () => {
+    if (running) setTimeout(() => { if (running) startRec(); }, 120);
+    else setStatus('정지됨', false);
+  };
+  try { rec.start(); } catch {}
+}
+
+async function start() {
+  if (!SR) return;
+  running = true;
+  $('mic').textContent = '정지'; $('mic').classList.add('on');
+  startRec();
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+}
+function stop() {
+  running = false;
+  $('mic').textContent = '시작'; $('mic').classList.remove('on');
+  try { rec?.stop(); } catch {}
+  setInterim(''); setStatus('정지됨', false);
+  wakeLock?.release?.().catch(() => {}); wakeLock = null;
+}
+$('mic').onclick = () => running ? stop() : start();
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && running && !wakeLock) {
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+  }
+});
+
+// ---------- copy / clear ----------
+$('copy').onclick = async () => {
+  const text = transcript.map(x => `[${x.t.toTimeString().slice(0, 8)}] ${x.en}\n${x.ko}`).join('\n\n');
+  try { await navigator.clipboard.writeText(text); $('copy').textContent = '복사됨'; }
+  catch { $('copy').textContent = '실패'; }
+  setTimeout(() => $('copy').textContent = '복사', 1500);
+};
+let clearArmed = false;
+$('clear').onclick = () => {
+  if (!clearArmed) { clearArmed = true; $('clear').textContent = '한번 더'; setTimeout(() => { clearArmed = false; $('clear').textContent = '지우기'; }, 2000); return; }
+  clearArmed = false; $('clear').textContent = '지우기';
+  feed.querySelectorAll('.line:not(#interim)').forEach(x => x.remove());
+  transcript.length = 0;
+};
+</script>
+</body>
+</html>
