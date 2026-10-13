@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0c1116">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Live Translator">
 <title>Live Translator</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-/* Layout: one-screen app. Header (status + tabs) / scrolling caption cards (English small on top, Korean large below) / thumb dock */
+/* Layout: one-screen app. Header (status + tabs) / pane (live cards or call history) / thumb dock */
 :root {
   --bg: #0c1116;
   --surface: #141b22;
@@ -47,7 +48,7 @@ body {
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* header */
 header { padding: 10px 16px 0; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
@@ -59,7 +60,8 @@ header { padding: 10px 16px 0; display: flex; flex-direction: column; gap: 10px;
 .dot.on { background: var(--live); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
 .icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; flex: none; }
-.icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.icon-btn svg, .side svg, #mic svg, .back svg { stroke: currentColor; fill: none; stroke-width: 1.8; }
+.icon-btn svg { width: 18px; height: 18px; }
 .brief-chip { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 1px dashed var(--line); background: transparent; border-radius: 10px; padding: 8px 12px; font-size: 13px; color: var(--muted); }
 .brief-chip b { color: var(--fg); font-weight: 600; white-space: nowrap; }
 .brief-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -67,8 +69,9 @@ header { padding: 10px 16px 0; display: flex; flex-direction: column; gap: 10px;
 .tabs { display: flex; gap: 20px; }
 .tabs button { background: none; border: 0; padding: 6px 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; }
 .tabs button[aria-selected="true"] { color: var(--fg); border-color: var(--accent); }
+.tabs .count { font: 500 11px var(--mono); margin-left: 4px; }
 
-/* feed */
+/* panes */
 main { flex: 1; min-height: 0; position: relative; }
 .pane { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 #feed { padding: 14px 16px 28px; display: flex; flex-direction: column; gap: 10px; }
@@ -77,12 +80,11 @@ main { flex: 1; min-height: 0; position: relative; }
 .seg .ko { font-size: var(--size); line-height: 1.5; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
 .seg .ko.wait { color: var(--muted); font-weight: 400; }
 .seg .meta { display: flex; align-items: center; gap: 8px; font: 500 10.5px var(--mono); color: var(--muted); letter-spacing: .04em; }
+.seg.open { border-color: color-mix(in srgb, var(--live) 55%, var(--line)); background: var(--raise); }
+.seg.open .meta::after { content: "말하는 중"; color: var(--live); font-family: var(--ko-font); font-weight: 600; letter-spacing: 0; }
+.hide-en .seg .en { display: none; }
 .tag { padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); }
 .tag.ai { color: var(--ai); border-color: color-mix(in srgb, var(--ai) 45%, transparent); }
-.tag.busy { color: var(--muted); }
-.hide-en .seg .en { display: none; }
-.seg.live { border-color: color-mix(in srgb, var(--live) 55%, var(--line)); background: var(--raise); }
-.seg.live .ko { color: color-mix(in srgb, var(--fg) 70%, transparent); }
 .w { border-radius: 4px; }
 .w.sel { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--fg); }
 .empty { color: var(--muted); font-size: 15px; line-height: 1.75; padding: 8px 2px; }
@@ -90,29 +92,59 @@ main { flex: 1; min-height: 0; position: relative; }
 .empty ol { padding-left: 1.2em; margin: 8px 0 0; }
 #jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; background: var(--accent); color: var(--bg); border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 600; font-size: 13px; box-shadow: 0 6px 18px rgb(0 0 0 / .3); }
 
-/* note pane */
-#notePane { padding: 16px 16px 28px; }
-.note-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: 600; }
+/* history */
+#historyPane { padding: 14px 16px 28px; display: flex; flex-direction: column; gap: 10px; }
+.call { display: flex; flex-direction: column; gap: 6px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.call .t { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call .m { display: flex; flex-wrap: wrap; gap: 6px 10px; font: 500 11.5px var(--mono); color: var(--muted); }
+.call .p { font-size: 13.5px; color: var(--muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.badge { padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); font-family: var(--ko-font); font-weight: 600; }
+.badge.now { color: var(--live); border-color: color-mix(in srgb, var(--live) 50%, var(--line)); }
+.foot { margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.foot .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* call detail */
+#detailPane { padding: 12px 16px 32px; display: flex; flex-direction: column; gap: 18px; }
+.dhead { display: flex; align-items: center; gap: 8px; }
+.back { display: flex; align-items: center; gap: 2px; background: none; border: 0; color: var(--muted); font-size: 14px; font-weight: 600; padding: 6px 4px 6px 0; }
+.back svg { width: 18px; height: 18px; }
+#dTitle { width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 4px 0 8px; font-size: 20px; font-weight: 700; color: var(--fg); border-radius: 0; }
+.dmeta { font: 500 12px var(--mono); color: var(--muted); margin-top: 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; }
 .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.btn.danger { color: var(--live); border-color: color-mix(in srgb, var(--live) 45%, var(--line)); }
+.btn.danger.armed { background: var(--live); color: #fff; }
 .btn:disabled { opacity: .5; }
-#note { font-size: 15.5px; line-height: 1.7; overflow-wrap: anywhere; }
-#note h3 { font-size: 16px; margin: 20px 0 6px; color: var(--accent); }
-#note h3:first-child { margin-top: 0; }
-#note ul { margin: 0; padding-left: 1.2em; }
-#note p { margin: 6px 0; }
-#note .muted { color: var(--muted); }
-#audioBox { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted); }
-#audioBox audio { width: 100%; }
+.sec h3 { margin: 0 0 8px; font: 700 12.5px var(--ko-font); color: var(--muted); }
+.sec .body { font-size: 15px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 13px var(--en-font); padding: 3px 9px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line); }
+.facts { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.facts li { font-size: 14px; line-height: 1.5; }
+.facts time { font: 500 11px var(--mono); color: var(--muted); margin-right: 6px; }
+.facts mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--fg); border-radius: 3px; padding: 0 2px; }
+.tline { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.tline:last-child { border-bottom: 0; }
+.tline .en { font: 14px/1.45 var(--en-font); color: var(--muted); overflow-wrap: anywhere; }
+.tline .ko { font-size: 16px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
+.tline time { font: 500 10.5px var(--mono); color: var(--muted); }
+#dNote h3.n { font-size: 15.5px; margin: 16px 0 6px; color: var(--accent); font-family: var(--ko-font); letter-spacing: 0; text-transform: none; }
+#dNote ul { margin: 0; padding-left: 1.2em; }
+#dNote p { margin: 6px 0; }
+#dNote { font-size: 15px; line-height: 1.7; overflow-wrap: anywhere; }
+.rec { display: flex; flex-direction: column; gap: 6px; }
+.rec audio { width: 100%; }
+.hint { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 
 /* dock */
 .dock { display: flex; align-items: center; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--surface); }
 .dock .side { height: 52px; min-width: 64px; border-radius: 14px; border: 1px solid var(--line); background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 0 10px; }
-.dock .side svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.dock .side svg { width: 18px; height: 18px; }
 .dock .side[aria-pressed="true"] { color: var(--live); border-color: color-mix(in srgb, var(--live) 50%, var(--line)); }
 #mic { flex: 1; height: 52px; border-radius: 14px; border: 0; background: var(--accent); color: var(--bg); font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; }
 #mic.on { background: var(--live); color: #fff; }
-#mic svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
+#mic svg { width: 20px; height: 20px; stroke-width: 2; }
 
 /* sheets */
 .scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 9; }
@@ -122,9 +154,12 @@ main { flex: 1; min-height: 0; position: relative; }
 .sheet label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .sheet input[type=text], .sheet input[type=password], .sheet textarea, .sheet select { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; font-weight: 400; color: var(--fg); width: 100%; }
 .sheet textarea { min-height: 150px; resize: vertical; line-height: 1.5; }
-.sheet .hint { font-size: 12.5px; font-weight: 400; color: var(--muted); line-height: 1.55; }
-.row { display: flex; gap: 10px; align-items: center; }
-.row > * { flex: 1; min-width: 0; }
+.sheet .hint { font-weight: 400; }
+.sheet details { border-top: 1px solid var(--line); padding-top: 12px; }
+.sheet summary { font-size: 14px; font-weight: 600; cursor: pointer; }
+.sheet details[open] > div { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+.row2 { display: flex; gap: 10px; }
+.row2 > * { flex: 1; min-width: 0; }
 .switch { flex-direction: row !important; align-items: center; justify-content: space-between; }
 .switch input { width: 22px; height: 22px; accent-color: var(--accent); }
 #wordSheet .word { font: 600 24px var(--en-font); }
@@ -145,45 +180,29 @@ main { flex: 1; min-height: 0; position: relative; }
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </div>
-  <button class="brief-chip" id="openBrief"><b>콜 정보</b><span id="briefPreview">주제·회사·용어를 넣으면 AI가 오인식을 고쳐줍니다</span></button>
+  <button class="brief-chip" id="openBrief"><b>콜 정보</b><span id="briefPreview">콜 이름과 메모를 남겨두면 기록에서 찾기 쉽습니다</span></button>
   <div class="tabs" role="tablist">
-    <button role="tab" id="tabFeed" aria-selected="true">실시간 자막</button>
-    <button role="tab" id="tabNote" aria-selected="false">콜 노트</button>
+    <button role="tab" id="tabLive" aria-selected="true">실시간 자막</button>
+    <button role="tab" id="tabHistory" aria-selected="false">기록<span class="count" id="histCount"></span></button>
   </div>
 </header>
 <div id="notices"></div>
 <main>
-  <div class="pane" id="feedPane">
+  <div class="pane" id="livePane">
     <div id="feed">
       <div class="empty" id="empty">
-        <b>시작</b>을 누르면 들리는 영어를 짧은 구간으로 끊어 받아 적고, 바로 아래에 한국어를 띄웁니다.
+        <b>시작</b>을 누르면 들리는 영어를 받아 적고 바로 아래에 한국어를 띄웁니다. 말하는 동안 카드가 문장 단위로 자라면서 번역도 문장 전체로 다시 다듬어집니다.
         <ol>
-          <li>위의 <b>콜 정보</b>에 주제와 고유명사를 적어두면 AI가 잘못 들은 단어를 문맥에 맞게 고칩니다.</li>
           <li>못 알아들은 영어 단어는 <b>탭</b>하면 뜻이 나옵니다.</li>
-          <li>콜이 끝나면 <b>콜 노트</b> 탭에서 요약·액션아이템을 만듭니다.</li>
+          <li>모든 콜은 <b>기록</b> 탭에 자동 저장되고, 콜마다 내보내기·삭제할 수 있습니다.</li>
+          <li>다음 콜을 할 때는 아래 <b>새 콜</b>을 누르세요.</li>
         </ol>
       </div>
-      <article class="seg live" id="live" hidden>
-        <div class="en"></div>
-        <div class="ko"></div>
-      </article>
     </div>
     <button id="jump" hidden>최신 자막으로 ↓</button>
   </div>
-  <div class="pane" id="notePane" hidden>
-    <div class="note-actions">
-      <button class="btn primary" id="makeNote">콜 노트 작성</button>
-      <button class="btn" id="copyNote" disabled>복사</button>
-      <button class="btn" id="saveNote" disabled>파일 저장</button>
-      <button class="btn" id="copyTranscript">전체 자막 복사</button>
-    </div>
-    <div id="note"><p class="muted">콜이 끝난 뒤 <b>콜 노트 작성</b>을 누르면 자막 전체와 콜 정보를 바탕으로 요약, 주요 논의, 숫자, 액션아이템을 정리합니다. 설정에서 Claude API 키를 넣어야 쓸 수 있습니다.</p></div>
-    <div id="audioBox" hidden>
-      <span>이번 콜 녹음</span>
-      <audio id="audio" controls></audio>
-      <a class="btn" id="audioDl" download>녹음 파일 저장</a>
-    </div>
-  </div>
+  <div class="pane" id="historyPane" hidden></div>
+  <div class="pane" id="detailPane" hidden></div>
 </main>
 <div class="dock">
   <button class="side" id="recBtn" aria-pressed="false" aria-label="녹음">
@@ -200,39 +219,21 @@ main { flex: 1; min-height: 0; position: relative; }
 <section class="sheet" id="briefSheet" hidden>
   <button class="close" data-close aria-label="닫기">×</button>
   <h2>콜 정보</h2>
-  <label>무슨 콜인가요?
-    <textarea id="brief" placeholder="예) ABC Capital과 Project Falcon 실사 콜. 상대: John Smith(CFO), Priya Rao(IR). 주제: FY25 EBITDA 조정, 운전자본, 차입금 리파이낸싱. 용어: TLB, covenant, PIK, ARR, churn."></textarea>
-    <span class="hint">회사명, 사람 이름, 제품명, 전문용어를 적을수록 정확해집니다. AI 보정과 콜 노트 작성에만 쓰이고 이 폰에만 저장됩니다.</span>
+  <label>콜 이름
+    <input type="text" id="briefTitle" placeholder="예) ABC Capital 실사 콜">
   </label>
-  <button class="btn primary" data-close>저장</button>
+  <label>메모
+    <textarea id="brief" placeholder="참석자, 주제, 자주 나올 용어 등. 예) John Smith(CFO), Priya Rao(IR). FY25 EBITDA 조정, 운전자본, 리파이낸싱. TLB, covenant, PIK."></textarea>
+    <span class="hint">기록과 내보내기 파일에 함께 저장됩니다. 나중에 API 키를 넣으면 AI 보정의 문맥으로도 쓰입니다.</span>
+  </label>
+  <button class="btn primary" data-close style="justify-content:center">저장</button>
 </section>
 
 <section class="sheet" id="settingsSheet" hidden>
   <button class="close" data-close aria-label="닫기">×</button>
   <h2>설정</h2>
-  <label>Claude API 키
-    <input type="password" id="apiKey" autocomplete="off" placeholder="sk-ant-...">
-    <span class="hint">넣으면 AI 보정과 콜 노트가 켜집니다. 키는 이 기기 브라우저에만 저장되고 Anthropic API로만 전송됩니다. console.anthropic.com에서 사용 한도를 걸어둔 키를 쓰는 걸 권합니다.</span>
-  </label>
-  <div class="row">
-    <label>실시간 보정 모델
-      <select id="liveModel">
-        <option value="claude-opus-5-5">Opus 5.5 · 가장 정확</option>
-        <option value="claude-sonnet-5-5">Sonnet 5.5 · 균형</option>
-        <option value="claude-haiku-5-5">Haiku 5.5 · 가장 빠름</option>
-      </select>
-    </label>
-    <label>콜 노트 모델
-      <select id="noteModel">
-        <option value="claude-opus-5-5">Opus 5.5</option>
-        <option value="claude-sonnet-5-5">Sonnet 5.5</option>
-        <option value="claude-haiku-5-5">Haiku 5.5</option>
-      </select>
-    </label>
-  </div>
-  <label class="switch">AI 실시간 보정 사용 <input type="checkbox" id="aiOn"></label>
   <label class="switch">영어 원문 표시 <input type="checkbox" id="showEn"></label>
-  <div class="row">
+  <div class="row2">
     <label>억양
       <select id="lang">
         <option value="en-US">미국 (EN-US)</option>
@@ -245,6 +246,32 @@ main { flex: 1; min-height: 0; position: relative; }
       <input type="range" id="size" min="15" max="34" step="1">
     </label>
   </div>
+  <details>
+    <summary>AI 보정 · 콜 노트 (선택, Claude API 유료)</summary>
+    <div>
+      <label>Claude API 키
+        <input type="password" id="apiKey" autocomplete="off" placeholder="sk-ant-...">
+        <span class="hint">넣으면 문장마다 Claude가 오인식을 고치고 다시 번역하며, 기록에서 콜 노트를 만들 수 있습니다. 키는 이 기기에만 저장되고 Anthropic API로만 전송됩니다.</span>
+      </label>
+      <div class="row2">
+        <label>실시간 보정
+          <select id="liveModel">
+            <option value="claude-opus-5-5">Opus 5.5 · 정확</option>
+            <option value="claude-sonnet-5-5">Sonnet 5.5 · 균형</option>
+            <option value="claude-haiku-5-5">Haiku 5.5 · 빠름</option>
+          </select>
+        </label>
+        <label>콜 노트
+          <select id="noteModel">
+            <option value="claude-opus-5-5">Opus 5.5</option>
+            <option value="claude-sonnet-5-5">Sonnet 5.5</option>
+            <option value="claude-haiku-5-5">Haiku 5.5</option>
+          </select>
+        </label>
+      </div>
+      <label class="switch">AI 실시간 보정 사용 <input type="checkbox" id="aiOn"></label>
+    </div>
+  </details>
 </section>
 
 <section class="sheet" id="wordSheet" hidden>
@@ -254,6 +281,7 @@ main { flex: 1; min-height: 0; position: relative; }
   <div class="dict" id="wordDict"></div>
 </section>
 
+<input type="file" id="importFile" accept="application/json,.json" hidden>
 <div id="toast" hidden></div>
 
 <script>
@@ -262,34 +290,71 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const isAndroid = /Android/i.test(navigator.userAgent);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('lt.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('lt.' + k, JSON.stringify(v)); } catch {} }
+  set(k, v) { try { localStorage.setItem('lt.' + k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem('lt.' + k); } catch {} }
 };
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pad = n => String(n).padStart(2, '0');
 const hhmmss = t => new Date(t).toTimeString().slice(0, 8);
+const ymdhm = t => { const d = new Date(t); return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const fileStamp = t => { const d = new Date(t); return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`; };
+const dur = ms => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`; };
 
 let toastTimer;
 function toast(msg, ms = 2600) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, ms); }
 function notice(html) { const d = document.createElement('div'); d.className = 'notice'; d.innerHTML = html; $('notices').appendChild(d); }
 if (!SR) notice('이 브라우저는 음성 인식을 지원하지 않습니다. 아이폰은 <b>Safari</b>, 안드로이드는 <b>Chrome</b>으로 열어주세요.');
 
+// ---------- storage (IndexedDB: calls + recordings) ----------
+let memCalls = new Map(), memAudio = new Map(), idbOK = true;
+const DB = new Promise((res, rej) => {
+  try {
+    const r = indexedDB.open('live-translator', 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      d.createObjectStore('calls', { keyPath: 'id' });
+      d.createObjectStore('audio', { keyPath: 'id' }).createIndex('callId', 'callId');
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  } catch (e) { rej(e); }
+}).catch(() => { idbOK = false; notice('이 브라우저에서는 기록을 저장할 수 없습니다(개인정보 보호 모드 등). 콜이 끝나면 꼭 내보내기 하세요.'); return null; });
+function req(storeName, mode, fn) {
+  return DB.then(d => d && new Promise((res, rej) => {
+    const t = d.transaction(storeName, mode); const r = fn(t.objectStore(storeName));
+    t.oncomplete = () => res(r?.result); t.onerror = () => rej(t.error);
+  }));
+}
+const db = {
+  putCall: c => idbOK ? req('calls', 'readwrite', s => s.put(c)) : (memCalls.set(c.id, c), Promise.resolve()),
+  getCall: id => idbOK ? req('calls', 'readonly', s => s.get(id)) : Promise.resolve(memCalls.get(id)),
+  allCalls: () => idbOK ? req('calls', 'readonly', s => s.getAll()).then(a => a || []) : Promise.resolve([...memCalls.values()]),
+  delCall: id => idbOK ? req('calls', 'readwrite', s => s.delete(id)) : (memCalls.delete(id), Promise.resolve()),
+  putAudio: a => idbOK ? req('audio', 'readwrite', s => s.put(a)) : (memAudio.set(a.id, a), Promise.resolve()),
+  audioFor: callId => idbOK ? req('audio', 'readonly', s => s.index('callId').getAll(callId)).then(a => a || []) : Promise.resolve([...memAudio.values()].filter(a => a.callId === callId)),
+  delAudioFor: async callId => { for (const a of await db.audioFor(callId)) idbOK ? await req('audio', 'readwrite', s => s.delete(a.id)) : memAudio.delete(a.id); }
+};
+async function askPersist() { try { await navigator.storage?.persist?.(); } catch {} }
+
 // ---------- settings ----------
 const cfg = {
   key: store.get('key', ''), liveModel: store.get('liveModel', 'claude-opus-5-5'), noteModel: store.get('noteModel', 'claude-opus-5-5'),
   aiOn: store.get('aiOn', true), showEn: store.get('showEn', true), lang: store.get('lang', 'en-US'), size: store.get('size', 21), rec: store.get('rec', false)
 };
+const aiReady = () => cfg.aiOn && cfg.key.startsWith('sk-');
+const hasKey = () => cfg.key.startsWith('sk-');
 function applyCfg() {
   document.documentElement.style.setProperty('--size', cfg.size + 'px');
   $('feed').classList.toggle('hide-en', !cfg.showEn);
   $('recBtn').setAttribute('aria-pressed', cfg.rec);
 }
-function aiReady() { return cfg.aiOn && cfg.key.startsWith('sk-'); }
 $('apiKey').value = cfg.key; $('liveModel').value = cfg.liveModel; $('noteModel').value = cfg.noteModel;
 $('aiOn').checked = cfg.aiOn; $('showEn').checked = cfg.showEn; $('lang').value = cfg.lang; $('size').value = cfg.size;
 applyCfg();
-const bind = (id, k, prop = 'value', after) => $(id).addEventListener(prop === 'checked' ? 'change' : 'input', () => {
-  cfg[k] = prop === 'checked' ? $(id).checked : (id === 'size' ? +$(id).value : $(id).value.trim()); store.set(k, cfg[k]); applyCfg(); after?.();
+const bind = (id, k, kind = 'text') => $(id).addEventListener(kind === 'check' ? 'change' : 'input', () => {
+  cfg[k] = kind === 'check' ? $(id).checked : kind === 'num' ? +$(id).value : $(id).value.trim(); store.set(k, cfg[k]); applyCfg();
 });
-bind('apiKey', 'key'); bind('liveModel', 'liveModel'); bind('noteModel', 'noteModel'); bind('aiOn', 'aiOn', 'checked'); bind('showEn', 'showEn', 'checked'); bind('size', 'size');
+bind('apiKey', 'key'); bind('liveModel', 'liveModel'); bind('noteModel', 'noteModel'); bind('aiOn', 'aiOn', 'check'); bind('showEn', 'showEn', 'check'); bind('size', 'size', 'num');
 $('lang').addEventListener('change', () => { cfg.lang = $('lang').value; store.set('lang', cfg.lang); if (running) rec?.abort(); });
 $('recBtn').onclick = () => {
   if (running) { toast('녹음 설정은 정지한 뒤에 바꿀 수 있습니다'); return; }
@@ -308,63 +373,83 @@ function closeSheet() {
 $('scrim').onclick = closeSheet;
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheet);
 $('openSettings').onclick = () => showSheet('settingsSheet');
-$('openBrief').onclick = () => showSheet('briefSheet');
+$('openBrief').onclick = () => { $('briefTitle').value = cur.title; $('brief').value = cur.brief; showSheet('briefSheet'); };
 
-// ---------- session state ----------
-const S = store.get('session', null) || { brief: '', segs: [], note: '' };
-let nextId = S.segs.reduce((m, s) => Math.max(m, s.id), 0) + 1;
+// ---------- current call ----------
+let cur = null;
+const newCallObj = () => ({ id: Date.now(), created: Date.now(), start: null, end: null, title: '', brief: '', blocks: [], note: '', hasAudio: false });
+const callTitle = c => c.title || `통화 ${ymdhm(c.start || c.created)}`;
 let saveTimer;
-function save() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set('session', S), 400); }
-$('brief').value = S.brief;
-function saveBrief() { S.brief = $('brief').value.trim(); save(); renderBriefChip(); }
-function renderBriefChip() {
-  const first = S.brief.split('\n')[0];
-  $('briefPreview').textContent = first || '주제·회사·용어를 넣으면 AI가 오인식을 고쳐줍니다';
-  $('openBrief').classList.toggle('set', !!first);
+function saveCur(now) {
+  clearTimeout(saveTimer);
+  const go = () => { if (cur.blocks.length || cur.brief || cur.title) db.putCall(cur).then(updateCount).catch(() => toast('저장 실패: 저장 공간을 확인하세요')); };
+  now ? go() : (saveTimer = setTimeout(go, 600));
 }
-renderBriefChip();
+function saveBrief() {
+  cur.title = $('briefTitle').value.trim(); cur.brief = $('brief').value.trim();
+  saveCur(true); renderBriefChip();
+}
+function renderBriefChip() {
+  const s = cur.title || cur.brief.split('\n')[0];
+  $('briefPreview').textContent = s || '콜 이름과 메모를 남겨두면 기록에서 찾기 쉽습니다';
+  $('openBrief').classList.toggle('set', !!s);
+}
+async function updateCount() {
+  const n = (await db.allCalls()).filter(c => c.blocks.length).length;
+  $('histCount').textContent = n ? n : '';
+}
 
 // ---------- tabs ----------
+let detailId = null;
 function setTab(which) {
-  const note = which === 'note';
-  $('tabFeed').setAttribute('aria-selected', !note); $('tabNote').setAttribute('aria-selected', note);
-  $('feedPane').hidden = note; $('notePane').hidden = !note;
+  $('tabLive').setAttribute('aria-selected', which === 'live');
+  $('tabHistory').setAttribute('aria-selected', which !== 'live');
+  $('livePane').hidden = which !== 'live';
+  $('historyPane').hidden = which !== 'history';
+  $('detailPane').hidden = which !== 'detail';
+  if (which === 'history') renderHistory();
 }
-$('tabFeed').onclick = () => setTab('feed');
-$('tabNote').onclick = () => setTab('note');
+$('tabLive').onclick = () => setTab('live');
+$('tabHistory').onclick = () => setTab('history');
 
-// ---------- feed rendering ----------
-const feed = $('feed'), feedPane = $('feedPane'), liveEl = $('live');
+// ---------- live feed rendering ----------
+const feed = $('feed'), livePane = $('livePane');
 const els = new Map();
 let autoScroll = true;
-feedPane.addEventListener('scroll', () => {
-  autoScroll = feedPane.scrollHeight - feedPane.scrollTop - feedPane.clientHeight < 80;
+livePane.addEventListener('scroll', () => {
+  autoScroll = livePane.scrollHeight - livePane.scrollTop - livePane.clientHeight < 80;
   if (autoScroll) $('jump').hidden = true;
 });
-$('jump').onclick = () => { feedPane.scrollTop = feedPane.scrollHeight; };
-function stick() { if (autoScroll) feedPane.scrollTop = feedPane.scrollHeight; else $('jump').hidden = false; }
+$('jump').onclick = () => { livePane.scrollTop = livePane.scrollHeight; };
+function stick() { if (autoScroll) livePane.scrollTop = livePane.scrollHeight; else $('jump').hidden = false; }
 const wordsHTML = text => text.split(/(\s+)/).map(t => /\S/.test(t) ? `<span class="w">${esc(t)}</span>` : t).join('');
 
-function renderSeg(seg) {
-  let el = els.get(seg.id);
+function renderBlock(b) {
+  let el = els.get(b.id);
   if (!el) {
     el = document.createElement('article'); el.className = 'seg';
     el.innerHTML = '<div class="en"></div><div class="ko"></div><div class="meta"></div>';
-    feed.insertBefore(el, liveEl); els.set(seg.id, el);
+    feed.appendChild(el); els.set(b.id, el);
     $('empty')?.remove();
   }
-  el.querySelector('.en').innerHTML = wordsHTML(seg.en || seg.raw);
+  el.classList.toggle('open', !!b.open);
+  el.querySelector('.en').innerHTML = wordsHTML(b.en || b.raw);
   const ko = el.querySelector('.ko');
-  ko.textContent = seg.ko || '번역 중…'; ko.classList.toggle('wait', !seg.ko);
-  const tag = seg.src === 'ai' ? '<span class="tag ai">AI 보정</span>'
-    : seg.src === 'ai-busy' ? '<span class="tag busy">AI 보정 중…</span>'
-    : seg.ko ? '<span class="tag">기계번역</span>' : '';
-  el.querySelector('.meta').innerHTML = `<time>${hhmmss(seg.t)}</time>${tag}`;
+  ko.textContent = b.ko || '…'; ko.classList.toggle('wait', !b.ko);
+  const tag = b.src === 'ai' ? '<span class="tag ai">AI 보정</span>' : b.src === 'ai-busy' ? '<span class="tag">AI 보정 중…</span>' : '';
+  el.querySelector('.meta').innerHTML = `<time>${hhmmss(b.t)}</time>${tag}`;
 }
-S.segs.forEach(renderSeg);
-requestAnimationFrame(() => { feedPane.scrollTop = feedPane.scrollHeight; });
+function renderFeed() {
+  els.forEach(el => el.remove()); els.clear();
+  if (cur.blocks.length) cur.blocks.forEach(renderBlock);
+  else if (!$('empty')) {
+    const d = document.createElement('div'); d.className = 'empty'; d.id = 'empty';
+    d.innerHTML = '새 콜입니다. <b>시작</b>을 누르면 기록이 시작됩니다.'; feed.prepend(d);
+  }
+  requestAnimationFrame(() => { livePane.scrollTop = livePane.scrollHeight; });
+}
 
-// ---------- machine translation (fast first pass) ----------
+// ---------- machine translation (free) ----------
 const mtCache = new Map();
 async function mt(text, dict = false) {
   const key = (dict ? 'd:' : '') + text;
@@ -374,11 +459,34 @@ async function mt(text, dict = false) {
   if (!res.ok) throw new Error('mt ' + res.status);
   const j = await res.json();
   const out = { text: (j[0] || []).map(s => s[0]).join(''), dict: dict && Array.isArray(j[1]) ? j[1].map(e => ({ pos: e[0], terms: (e[1] || []).slice(0, 6) })) : [] };
+  if (mtCache.size > 400) mtCache.clear();
   mtCache.set(key, out);
   return out;
 }
+// Per-card throttle: the card's whole text is retranslated at most every MT_GAP ms while it grows,
+// so the translation keeps sentence context and never waits for the speaker to stop.
+const MT_GAP = 450;
+const mtState = new Map();
+function requestMT(b, immediate) {
+  let st = mtState.get(b.id);
+  if (!st) mtState.set(b.id, st = { busy: false, last: 0, timer: null });
+  if (st.busy) { st.again = true; return; }
+  clearTimeout(st.timer);
+  const wait = immediate ? 0 : Math.max(0, MT_GAP - (Date.now() - st.last));
+  st.timer = setTimeout(async () => {
+    const text = b.raw; if (!text) return;
+    st.busy = true; st.last = Date.now(); st.again = false;
+    try {
+      const r = await mt(text);
+      if (b.src !== 'ai') { b.ko = r.text; renderBlock(b); stick(); }
+    } catch { if (!b.ko) { b.ko = '(번역 실패 · 인터넷 연결 확인)'; renderBlock(b); } }
+    st.busy = false;
+    if (st.again || b.raw !== text) requestMT(b, !b.open);
+    else if (!b.open) { mtState.delete(b.id); saveCur(); }
+  }, wait);
+}
 
-// ---------- Claude API (direct from the browser with the user's own key) ----------
+// ---------- Claude API (optional, user's own key) ----------
 async function claude({ model, system, user, maxTokens = 1024, effort = 'low', onText }) {
   const headers = {
     'content-type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01',
@@ -392,13 +500,10 @@ async function claude({ model, system, user, maxTokens = 1024, effort = 'low', o
   const useFallback = model !== 'claude-haiku-5-5';
   if (useFallback) { headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; body.fallbacks = 'default'; }
   if (onText) body.stream = true;
-  let res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(body) });
-  if (res.status === 400 && useFallback) {
-    const msg = await res.clone().text();
-    if (/fallback/i.test(msg)) {
-      delete headers['anthropic-beta']; delete body.fallbacks;
-      res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(body) });
-    }
+  const send = () => fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(body) });
+  let res = await send();
+  if (res.status === 400 && useFallback && /fallback/i.test(await res.clone().text())) {
+    delete headers['anthropic-beta']; delete body.fallbacks; res = await send();
   }
   if (!res.ok) {
     let m = ''; try { m = (await res.json()).error?.message || ''; } catch {}
@@ -428,106 +533,89 @@ async function claude({ model, system, user, maxTokens = 1024, effort = 'low', o
 }
 function apiErrorToast(e) {
   if (e.status === 401) toast('API 키가 올바르지 않습니다. 설정에서 확인하세요.', 4000);
-  else if (e.status === 429) toast('API 요청이 너무 많습니다. 잠시 후 다시 시도됩니다.');
+  else if (e.status === 429) toast('API 요청이 너무 많습니다. 잠시 후 다시 시도하세요.');
   else if (e.status === 400 && /credit/i.test(e.message)) toast('API 크레딧이 부족합니다.', 4000);
-  else toast('AI 보정 실패: ' + e.message.slice(0, 80));
+  else toast('AI 처리 실패: ' + e.message.slice(0, 80));
 }
+const LIVE_SYSTEM = (title, brief) => `You help a Korean professional follow a live English call. You receive one passage at a time of the other party's speech, produced by automatic speech recognition (ASR).
 
-const LIVE_SYSTEM = brief => `You help a Korean professional follow a live English call. You receive short segments of the other party's speech produced by automatic speech recognition (ASR), one at a time.
-
-For each new segment:
-1. Restore what the speaker most likely said. ASR mishears names, jargon, numbers and homophones, and gives no punctuation. Use the call context and the preceding segments to fix misheard words, then add punctuation and casing. Do not paraphrase, summarize or add content; keep words you cannot confidently fix.
-2. Translate the corrected segment into natural, concise Korean as spoken in a business meeting. Keep company names, people's names and numbers exact. When a Korean term would be ambiguous, keep the English term in parentheses, e.g. 약정(covenant).
-The segment may stop mid-sentence. Translate exactly what is there without completing the thought.
+For each new passage:
+1. Restore what the speaker most likely said. ASR mishears names, jargon, numbers and homophones, and gives no punctuation. Use the call context and the preceding passages to fix misheard words, then add punctuation and casing. Do not paraphrase, summarize or add content; keep words you cannot confidently fix.
+2. Translate the corrected passage into natural, concise Korean as spoken in a business meeting. Keep company names, people's names and numbers exact. When a Korean term would be ambiguous, keep the English term in parentheses, e.g. 약정(covenant).
+The passage may stop mid-sentence. Translate exactly what is there without completing the thought.
 
 Reply with only a JSON object and nothing else: {"en": "<corrected English>", "ko": "<Korean translation>"}
 
 Call context written by the listener:
-${brief || '(none provided)'}`;
-
+${[title, brief].filter(Boolean).join('\n') || '(none provided)'}`;
 let aiInFlight = 0;
-async function refine(seg) {
-  if (!aiReady()) return;
-  if (aiInFlight >= 4) return; // keep the machine translation rather than queueing a backlog
+async function refine(b) {
+  if (!aiReady() || aiInFlight >= 4) return;
   aiInFlight++;
-  seg.src = 'ai-busy'; renderSeg(seg);
-  const idx = S.segs.indexOf(seg);
-  const prev = S.segs.slice(Math.max(0, idx - 6), idx).map(s => '- ' + (s.en || s.raw)).join('\n');
+  b.src = 'ai-busy'; renderBlock(b);
+  const idx = cur.blocks.indexOf(b);
+  const prev = cur.blocks.slice(Math.max(0, idx - 4), idx).map(s => '- ' + (s.en || s.raw)).join('\n');
   try {
     const out = await claude({
-      model: cfg.liveModel, system: LIVE_SYSTEM(S.brief), maxTokens: 1500, effort: 'low',
-      user: `Preceding segments (context only):\n${prev || '(start of call)'}\n\nNew ASR segment:\n${seg.raw}`
+      model: cfg.liveModel, system: LIVE_SYSTEM(cur.title, cur.brief), maxTokens: 2000, effort: 'low',
+      user: `Preceding passages (context only):\n${prev || '(start of call)'}\n\nNew ASR passage:\n${b.raw}`
     });
     const m = out.match(/\{[\s\S]*\}/);
     const j = m ? JSON.parse(m[0]) : null;
-    if (j?.ko) { seg.en = (j.en || seg.raw).trim(); seg.ko = j.ko.trim(); seg.src = 'ai'; }
-    else seg.src = 'mt';
-  } catch (e) {
-    seg.src = 'mt'; apiErrorToast(e);
-  } finally {
-    aiInFlight--; renderSeg(seg); save(); stick();
-  }
+    if (j?.ko) { b.en = (j.en || b.raw).trim(); b.ko = j.ko.trim(); b.src = 'ai'; } else b.src = '';
+  } catch (e) { b.src = ''; apiErrorToast(e); }
+  aiInFlight--; renderBlock(b); saveCur(); stick();
 }
 
-function addSegment(raw) {
-  raw = raw.trim();
-  if (!raw) return;
-  const seg = { id: nextId++, t: Date.now(), raw, en: '', ko: '', src: '' };
-  S.segs.push(seg); renderSeg(seg); save(); stick();
-  mt(raw).then(r => { if (seg.src !== 'ai') { seg.ko = r.text; if (!seg.src) seg.src = 'mt'; renderSeg(seg); save(); stick(); } })
-    .catch(() => { if (!seg.ko) { seg.ko = '(번역 실패 · 인터넷 연결 확인)'; renderSeg(seg); } });
-  refine(seg);
-}
-
-// ---------- live (uncommitted) line ----------
-let liveSeq = 0, liveTimer, liveText = '';
-function setLive(text) {
-  if (text === liveText) return;
-  liveText = text;
-  if (!text) { liveEl.hidden = true; liveEl.querySelector('.ko').textContent = ''; return; }
-  $('empty')?.remove();
-  liveEl.hidden = false;
-  liveEl.querySelector('.en').innerHTML = wordsHTML(text);
-  stick();
-  clearTimeout(liveTimer);
-  const seq = ++liveSeq;
-  liveTimer = setTimeout(() => mt(text).then(r => {
-    if (seq === liveSeq) { liveEl.querySelector('.ko').textContent = r.text; stick(); }
-  }).catch(() => {}), 250);
-}
-
-// ---------- segmentation ----------
-// iOS Safari keeps one ever-growing result and rarely marks it final, so segments are cut here:
-// when the live tail passes MAX_LIVE words, at a pause, or when the engine finalizes.
-const MAX_LIVE = 16, PAUSE_MS = 1100;
-const BREAK_BEFORE = new Set(['and', 'but', 'so', 'because', 'which', 'that', 'if', 'when', 'while', 'where', 'although', 'then', 'or', 'whereas', 'since', 'unless']);
-let committed = 0, latestWords = [], pauseTimer;
+// ---------- segmentation into cards ----------
+// A card grows while the speaker talks and closes at a pause (or when it gets long),
+// so each card is roughly one spoken sentence.
+const MAX_WORDS = 32, PAUSE_MS = 1200;
+const BREAK_BEFORE = new Set(['and', 'but', 'so', 'because', 'which', 'that', 'if', 'when', 'while', 'where', 'although', 'then', 'or', 'whereas', 'since', 'unless', 'now', 'okay', 'right']);
+let committed = 0, latestWords = [], pauseTimer = null, openBlock = null;
 function pickBreak(words) {
-  for (let i = Math.min(12, words.length - 4); i >= 7; i--) if (/[.,;:?!]$/.test(words[i - 1])) return i;
-  for (let i = Math.min(12, words.length - 4); i >= 7; i--) if (BREAK_BEFORE.has(words[i].toLowerCase())) return i;
-  return 10;
+  const hi = Math.min(26, words.length - 4);
+  for (let i = hi; i >= 16; i--) if (/[.?!]$/.test(words[i - 1])) return i;
+  for (let i = hi; i >= 16; i--) if (/[,;:]$/.test(words[i - 1])) return i;
+  for (let i = hi; i >= 16; i--) if (BREAK_BEFORE.has(words[i].toLowerCase())) return i;
+  return 24;
 }
-function commit(n) {
-  const text = latestWords.slice(committed, committed + n).join(' ');
-  committed += n;
-  addSegment(text);
+function setOpen(text) {
+  if (!openBlock) {
+    openBlock = { id: Date.now() + Math.random(), t: Date.now(), raw: '', en: '', ko: '', src: '', open: true };
+    cur.blocks.push(openBlock);
+    if (!cur.start) cur.start = openBlock.t;
+  }
+  if (openBlock.raw === text) return;
+  openBlock.raw = text; cur.end = Date.now();
+  renderBlock(openBlock); stick(); requestMT(openBlock);
 }
-function flushAll() {
+function closeBlock() {
+  const b = openBlock; if (!b) return;
+  openBlock = null; b.open = false;
+  renderBlock(b); requestMT(b, true); saveCur(); refine(b);
+}
+function flush() {
   clearTimeout(pauseTimer);
-  const n = latestWords.length - committed;
-  if (n > 0) commit(n);
-  liveSeq++; setLive('');
+  const pending = latestWords.slice(committed);
+  if (pending.length) { setOpen(pending.join(' ')); committed = latestWords.length; }
+  closeBlock();
 }
 function onResult(e) {
   let full = '', allFinal = true;
   for (let i = 0; i < e.results.length; i++) { full += e.results[i][0].transcript + ' '; if (!e.results[i].isFinal) allFinal = false; }
   latestWords = full.trim().split(/\s+/).filter(Boolean);
   if (latestWords.length < committed) committed = latestWords.length;
-  if (allFinal) { flushAll(); return; }
-  while (latestWords.length - committed >= MAX_LIVE) commit(pickBreak(latestWords.slice(committed)));
-  setLive(latestWords.slice(committed).join(' '));
+  let pending = latestWords.slice(committed);
+  while (pending.length >= MAX_WORDS) {
+    const n = pickBreak(pending);
+    setOpen(pending.slice(0, n).join(' ')); closeBlock();
+    committed += n; pending = latestWords.slice(committed);
+  }
+  if (pending.length) setOpen(pending.join(' '));
+  if (allFinal) { flush(); return; }
   clearTimeout(pauseTimer);
-  pauseTimer = setTimeout(flushAll, PAUSE_MS);
+  pauseTimer = setTimeout(flush, PAUSE_MS);
 }
 
 // ---------- speech recognition ----------
@@ -546,7 +634,7 @@ function startRec() {
     else if (e.error === 'audio-capture') { stop(); notice('마이크를 쓸 수 없습니다. 이 폰으로 통화 중이면 통화 앱이 마이크를 쓰고 있습니다. 녹음을 켰다면 끄고 다시 시작해 보세요.'); }
   };
   rec.onend = () => {
-    flushAll();
+    flush();
     if (running) setTimeout(() => { if (running) startRec(); }, 100);
     else setStatus('정지됨', false);
   };
@@ -561,17 +649,18 @@ async function startRecording() {
     const mime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(m => window.MediaRecorder?.isTypeSupported?.(m)) || '';
     recorder = new MediaRecorder(recStream, mime ? { mimeType: mime } : {});
     recChunks = []; recStartedAt = Date.now();
+    const callId = cur.id;
     recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       const type = recorder?.mimeType || mime || 'audio/webm';
       const blob = new Blob(recChunks, { type });
-      const url = URL.createObjectURL(blob);
-      const ext = type.includes('mp4') ? 'm4a' : 'webm';
-      const d = new Date(recStartedAt);
-      const name = `call-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}.${ext}`;
-      $('audio').src = url; $('audioDl').href = url; $('audioDl').download = name; $('audioBox').hidden = false;
       recStream?.getTracks().forEach(t => t.stop()); recStream = null; recorder = null;
-      toast('녹음이 콜 노트 탭에 저장됐습니다');
+      try {
+        await db.putAudio({ id: callId + '-' + recStartedAt, callId, t: recStartedAt, type, blob });
+        if (cur.id === callId) { cur.hasAudio = true; saveCur(true); }
+        else { const c = await db.getCall(callId); if (c) { c.hasAudio = true; await db.putCall(c); } }
+        toast('녹음이 이 콜 기록에 저장됐습니다');
+      } catch { toast('녹음 저장 실패: 저장 공간이 부족할 수 있습니다', 4000); }
     };
     recorder.start(1000);
   } catch {
@@ -581,37 +670,39 @@ async function startRecording() {
 
 async function start() {
   if (!SR) return;
-  running = true;
+  running = true; askPersist();
   $('mic').classList.add('on'); $('mic').querySelector('span').textContent = '정지';
+  setTab('live');
   if (cfg.rec) await startRecording();
   startRec();
   try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
-  if (!aiReady() && !store.get('aiHintShown', false)) { store.set('aiHintShown', true); toast('설정에서 Claude API 키를 넣으면 AI 보정이 켜집니다', 3500); }
 }
 function stop() {
   running = false;
   $('mic').classList.remove('on'); $('mic').querySelector('span').textContent = '시작';
   try { rec?.stop(); } catch {}
-  flushAll(); setStatus('정지됨', false);
+  flush(); setStatus('정지됨', false); saveCur(true);
   if (recorder && recorder.state !== 'inactive') recorder.stop();
   wakeLock?.release?.().catch(() => {}); wakeLock = null;
 }
 $('mic').onclick = () => running ? stop() : start();
 document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'hidden') saveCur(true);
   if (document.visibilityState === 'visible' && running && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {} }
 });
+window.addEventListener('pagehide', () => saveCur(true));
 
 // ---------- new call ----------
-let newArmed = false;
+function beginNewCall() {
+  cur = newCallObj(); store.set('curId', cur.id);
+  renderFeed(); renderBriefChip();
+}
 $('newCall').onclick = () => {
   if (running) { toast('먼저 정지하세요'); return; }
-  if (!newArmed) { newArmed = true; $('newCall').querySelector('span').textContent = '한번 더'; setTimeout(() => { newArmed = false; $('newCall').querySelector('span').textContent = '새 콜'; }, 2500); return; }
-  newArmed = false; $('newCall').querySelector('span').textContent = '새 콜';
-  els.forEach(el => el.remove()); els.clear();
-  S.segs = []; S.note = ''; S.brief = ''; $('brief').value = ''; renderBriefChip(); renderNote(); save();
-  $('audioBox').hidden = true;
-  toast('새 콜을 시작할 준비가 됐습니다. 콜 정보를 입력하세요.');
-  showSheet('briefSheet');
+  if (!cur.blocks.length) { $('briefTitle').value = cur.title; $('brief').value = cur.brief; showSheet('briefSheet'); return; }
+  saveCur(true); beginNewCall(); setTab('live');
+  toast('이전 콜은 기록에 저장됐습니다');
+  $('briefTitle').value = ''; $('brief').value = ''; showSheet('briefSheet');
 };
 
 // ---------- word lookup ----------
@@ -629,9 +720,47 @@ feed.addEventListener('click', async e => {
   } catch { $('wordKo').textContent = '(찾기 실패)'; }
 });
 
-// ---------- call note ----------
-function transcriptText(withKo) {
-  return S.segs.map(s => `[${hhmmss(s.t)}] ${s.en || s.raw}` + (withKo && s.ko ? `\n  ${s.ko}` : '')).join('\n');
+// ---------- history ----------
+async function renderHistory() {
+  const calls = (await db.allCalls()).filter(c => c.blocks.length || c.id === cur.id && (c.title || c.brief)).sort((a, b) => (b.start || b.created) - (a.start || a.created));
+  const pane = $('historyPane');
+  const items = calls.map(c => {
+    const first = c.blocks.find(b => b.ko)?.ko || '';
+    const badges = [c.id === cur.id ? '<span class="badge now">현재 콜</span>' : '', c.hasAudio ? '<span class="badge">녹음</span>' : '', c.note ? '<span class="badge">노트</span>' : ''].join('');
+    return `<button class="call" data-id="${c.id}">
+      <span class="t">${esc(callTitle(c))}</span>
+      <span class="m"><span>${ymdhm(c.start || c.created)}</span>${c.start && c.end ? `<span>${dur(c.end - c.start)}</span>` : ''}<span>${c.blocks.length}문장</span>${badges}</span>
+      ${first ? `<span class="p">${esc(first)}</span>` : ''}
+    </button>`;
+  }).join('');
+  pane.innerHTML = (items || '<div class="empty">아직 기록이 없습니다. 콜을 시작하면 여기에 자동으로 쌓입니다.</div>') + `
+    <div class="foot">
+      <div>기록은 이 폰 브라우저 안에만 저장됩니다. 아이폰은 Safari 공유 버튼 → <b>홈 화면에 추가</b>로 열어야 오래 보관되고, 브라우저 데이터를 지우면 함께 지워집니다. 중요한 콜은 내보내기 해두세요.</div>
+      <div class="row"><button class="btn" id="backupAll">전체 백업 파일 만들기</button><button class="btn" id="restore">백업 불러오기</button></div>
+    </div>`;
+  pane.querySelectorAll('.call').forEach(b => b.onclick = () => openDetail(+b.dataset.id));
+  $('backupAll').onclick = backupAll;
+  $('restore').onclick = () => $('importFile').click();
+}
+
+// free, rule-based extraction of figures and names
+const NUMWORD = /^(hundred|thousand|million|billion|trillion|percent|percentage|bps|basis|half|quarter|dozen|k|mm|bn)$/i;
+function keyFacts(c) {
+  const facts = [], names = new Map();
+  c.blocks.forEach(b => {
+    const words = (b.en || b.raw).split(/\s+/);
+    let last = -99;
+    words.forEach((w, i) => {
+      const clean = w.replace(/[^\w$%.'-]/g, '');
+      if ((/\d/.test(clean) || NUMWORD.test(clean) || /[$€£¥%]/.test(w)) && i > last) {
+        const a = Math.max(0, i - 5), z = Math.min(words.length, i + 6);
+        facts.push({ t: b.t, html: words.slice(a, z).map((x, k) => (a + k === i ? `<mark>${esc(x)}</mark>` : esc(x))).join(' ') });
+        last = z;
+      }
+      if (i > 0 && /^[A-Z][a-zA-Z&'-]{1,}$/.test(clean) && !/^(I|I'm|I'll|I've|I'd|OK|Okay)$/.test(clean) && !/[.?!]$/.test(words[i - 1])) names.set(clean, (names.get(clean) || 0) + 1);
+    });
+  });
+  return { facts: facts.slice(0, 40), names: [...names.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(e => e[0]) };
 }
 function mdToHTML(md) {
   const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
@@ -642,17 +771,112 @@ function mdToHTML(md) {
     if (li) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${inline(li[1])}</li>`; continue; }
     if (inList) { html += '</ul>'; inList = false; }
     const h = line.match(/^#{1,4}\s+(.*)/);
-    if (h) html += `<h3>${inline(h[1])}</h3>`;
+    if (h) html += `<h3 class="n">${inline(h[1])}</h3>`;
     else if (line.trim()) html += `<p>${inline(line)}</p>`;
   }
   return html + (inList ? '</ul>' : '');
 }
-function renderNote() {
-  if (S.note) { $('note').innerHTML = mdToHTML(S.note); $('copyNote').disabled = $('saveNote').disabled = false; $('makeNote').textContent = '다시 작성'; }
-  else { $('note').innerHTML = '<p class="muted">콜이 끝난 뒤 <b>콜 노트 작성</b>을 누르면 자막 전체와 콜 정보를 바탕으로 요약, 주요 논의, 숫자, 액션아이템을 정리합니다. 설정에서 Claude API 키를 넣어야 쓸 수 있습니다.</p>'; $('copyNote').disabled = $('saveNote').disabled = true; $('makeNote').textContent = '콜 노트 작성'; }
-}
-renderNote();
+const getCall = async id => id === cur.id ? cur : await db.getCall(id);
 
+async function openDetail(id) {
+  const c = await getCall(id); if (!c) return;
+  detailId = id; setTab('detail');
+  const { facts, names } = keyFacts(c);
+  const audios = await db.audioFor(id);
+  const pane = $('detailPane');
+  pane.innerHTML = `
+    <div class="dhead"><button class="back" id="dBack"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>기록</button></div>
+    <div>
+      <input id="dTitle" value="${esc(callTitle(c))}" aria-label="콜 이름">
+      <div class="dmeta">${ymdhm(c.start || c.created)}${c.start && c.end ? ' · ' + dur(c.end - c.start) : ''} · ${c.blocks.length}문장${c.id === cur.id ? ' · 현재 콜' : ''}</div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="dExport">내보내기</button>
+      <button class="btn" id="dCopy">복사</button>
+      ${c.id !== cur.id ? '<button class="btn" id="dResume">이어서 기록</button>' : ''}
+      <button class="btn danger" id="dDelete">삭제</button>
+    </div>
+    ${c.brief ? `<div class="sec"><h3>메모</h3><div class="body">${esc(c.brief)}</div></div>` : ''}
+    <div class="sec"><h3>콜 노트</h3>
+      <div id="dNote">${c.note ? mdToHTML(c.note) : `<div class="hint">${hasKey() ? 'Claude가 자막 전체를 읽고 요약·주요 논의·숫자·액션아이템을 한국어로 정리합니다.' : '설정에서 Claude API 키를 넣으면 AI가 콜 노트를 써줍니다. 지금은 아래 자동 추출과 전체 자막을 내보낼 수 있습니다.'}</div>`}</div>
+      ${hasKey() ? `<div class="actions" style="margin-top:10px"><button class="btn" id="dNoteBtn">${c.note ? '노트 다시 작성' : 'AI 콜 노트 작성'}</button></div>` : ''}
+    </div>
+    ${names.length ? `<div class="sec"><h3>자주 나온 이름·고유명사</h3><div class="chips">${names.map(n => `<span class="chip">${esc(n)}</span>`).join('')}</div></div>` : ''}
+    ${facts.length ? `<div class="sec"><h3>숫자가 나온 부분</h3><ul class="facts">${facts.map(f => `<li><time>${hhmmss(f.t)}</time>${f.html}</li>`).join('')}</ul></div>` : ''}
+    ${audios.length ? `<div class="sec"><h3>녹음</h3>${audios.map((a, i) => `<div class="rec"><audio controls preload="none" data-a="${i}"></audio><div class="actions"><button class="btn" data-dl="${i}">녹음 파일 저장</button></div></div>`).join('')}</div>` : ''}
+    <div class="sec"><h3>전체 자막</h3>${c.blocks.map(b => `<div class="tline"><time>${hhmmss(b.t)}</time><div class="en">${esc(b.en || b.raw)}</div><div class="ko">${esc(b.ko)}</div></div>`).join('') || '<div class="hint">자막이 없습니다.</div>'}</div>`;
+  pane.scrollTop = 0;
+
+  const urls = audios.map(a => URL.createObjectURL(a.blob));
+  pane.querySelectorAll('audio[data-a]').forEach(el => el.src = urls[+el.dataset.a]);
+  pane.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => {
+    const a = audios[+b.dataset.dl];
+    shareOrDownload(a.blob, `${fileName(c)}-${fileStamp(a.t)}.${a.type.includes('mp4') ? 'm4a' : 'webm'}`);
+  });
+  $('dBack').onclick = () => setTab('history');
+  $('dTitle').onchange = async () => { c.title = $('dTitle').value.trim(); if (c === cur) { saveCur(true); renderBriefChip(); } else await db.putCall(c); };
+  $('dExport').onclick = () => shareOrDownload(new Blob([exportText(c)], { type: 'text/plain' }), `${fileName(c)}.txt`);
+  $('dCopy').onclick = async () => { try { await navigator.clipboard.writeText(exportText(c)); toast('복사했습니다'); } catch { toast('복사하지 못했습니다'); } };
+  if ($('dResume')) $('dResume').onclick = async () => {
+    if (running) { toast('먼저 정지하세요'); return; }
+    saveCur(true); cur = c; store.set('curId', cur.id); renderBriefChip(); renderFeed(); setTab('live'); toast('이 콜에 이어서 기록합니다');
+  };
+  let armed = false;
+  $('dDelete').onclick = async () => {
+    if (c === cur && running) { toast('먼저 정지하세요'); return; }
+    if (!armed) { armed = true; $('dDelete').classList.add('armed'); $('dDelete').textContent = '한번 더 누르면 삭제'; setTimeout(() => { armed = false; $('dDelete')?.classList.remove('armed'); if ($('dDelete')) $('dDelete').textContent = '삭제'; }, 3000); return; }
+    await db.delCall(c.id); await db.delAudioFor(c.id);
+    if (c === cur) beginNewCall();
+    urls.forEach(u => URL.revokeObjectURL(u));
+    updateCount(); setTab('history'); toast('삭제했습니다');
+  };
+  if ($('dNoteBtn')) $('dNoteBtn').onclick = () => makeNote(c);
+}
+
+const fileName = c => `call-${fileStamp(c.start || c.created)}-${callTitle(c).replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40)}`;
+function exportText(c) {
+  const { facts, names } = keyFacts(c);
+  const strip = h => h.replace(/<\/?mark>/g, '**').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  return [
+    `# ${callTitle(c)}`,
+    `${ymdhm(c.start || c.created)}${c.start && c.end ? ' · ' + dur(c.end - c.start) : ''} · ${c.blocks.length}문장`,
+    c.brief ? `\n## 메모\n${c.brief}` : '',
+    c.note ? `\n## 콜 노트\n${c.note}` : '',
+    names.length ? `\n## 자주 나온 이름·고유명사\n${names.join(', ')}` : '',
+    facts.length ? `\n## 숫자가 나온 부분\n${facts.map(f => `- [${hhmmss(f.t)}] ${strip(f.html)}`).join('\n')}` : '',
+    `\n## 전체 자막\n${c.blocks.map(b => `[${hhmmss(b.t)}] ${b.en || b.raw}\n${b.ko}`).join('\n\n')}`,
+    '\n— Live Translator'
+  ].filter(Boolean).join('\n');
+}
+async function shareOrDownload(blob, name) {
+  try {
+    const file = new File([blob], name, { type: blob.type });
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+async function backupAll() {
+  saveCur(true);
+  const calls = (await db.allCalls()).filter(c => c.blocks.length);
+  if (!calls.length) { toast('백업할 기록이 없습니다'); return; }
+  const data = JSON.stringify({ app: 'live-translator', version: 1, exported: Date.now(), calls }, null, 1);
+  shareOrDownload(new Blob([data], { type: 'application/json' }), `live-translator-backup-${fileStamp(Date.now())}.json`);
+  toast('녹음 파일은 백업에 포함되지 않습니다. 콜마다 따로 저장하세요.', 3500);
+}
+$('importFile').onchange = async () => {
+  const f = $('importFile').files[0]; $('importFile').value = '';
+  if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    if (j.app !== 'live-translator' || !Array.isArray(j.calls)) throw new Error();
+    for (const c of j.calls) if (c.id && Array.isArray(c.blocks)) await db.putCall(c);
+    toast(`${j.calls.length}개 콜을 불러왔습니다`); renderHistory(); updateCount();
+  } catch { toast('Live Translator 백업 파일이 아닙니다'); }
+};
+
+// ---------- AI call note (optional) ----------
 const NOTE_SYSTEM = `You write call notes in Korean for a Korean professional who just finished an English call. The transcript comes from automatic speech recognition of the other party's speech, so it has misheard words, missing punctuation and occasionally the listener's own voice. Infer the intended meaning from context; where something is genuinely unclear, say so rather than guessing.
 
 Write in Korean using this markdown structure:
@@ -671,39 +895,43 @@ Write in Korean using this markdown structure:
 (short list of transcript passages that may have been misheard, with your best reading)
 
 Omit a section only if there is truly nothing for it. Keep English terms of art in parentheses where helpful.`;
-
 let noteBusy = false;
-$('makeNote').onclick = async () => {
-  if (noteBusy) return;
-  if (!cfg.key.startsWith('sk-')) { toast('설정에서 Claude API 키를 먼저 넣어주세요', 3500); showSheet('settingsSheet'); return; }
-  if (!S.segs.length) { toast('아직 자막이 없습니다'); return; }
-  noteBusy = true; $('makeNote').disabled = true; $('makeNote').textContent = '작성 중…';
-  $('note').innerHTML = '<p class="muted">자막을 읽고 정리하는 중입니다…</p>';
+async function makeNote(c) {
+  if (noteBusy || !c.blocks.length) return;
+  noteBusy = true; $('dNoteBtn').disabled = true; $('dNoteBtn').textContent = '작성 중…';
+  $('dNote').innerHTML = '<div class="hint">자막을 읽고 정리하는 중입니다…</div>';
   try {
-    S.note = await claude({
+    c.note = await claude({
       model: cfg.noteModel, system: NOTE_SYSTEM, maxTokens: 16000, effort: 'medium',
-      user: `Call context written by the listener:\n${S.brief || '(none provided)'}\n\nTranscript (${S.segs.length} segments, ${hhmmss(S.segs[0].t)}–${hhmmss(S.segs.at(-1).t)}):\n${transcriptText(false)}`,
-      onText: t => { $('note').innerHTML = mdToHTML(t); }
+      user: `Call title: ${callTitle(c)}\nListener's notes:\n${c.brief || '(none)'}\n\nTranscript (${c.blocks.length} passages, ${hhmmss(c.blocks[0].t)}–${hhmmss(c.blocks.at(-1).t)}):\n${c.blocks.map(b => `[${hhmmss(b.t)}] ${b.en || b.raw}`).join('\n')}`,
+      onText: t => { if (detailId === c.id) $('dNote').innerHTML = mdToHTML(t); }
     });
-    save();
+    c === cur ? saveCur(true) : await db.putCall(c);
   } catch (e) { apiErrorToast(e); }
-  noteBusy = false; $('makeNote').disabled = false; renderNote();
-};
-async function copyText(text, btn) {
-  const label = btn.textContent;
-  try { await navigator.clipboard.writeText(text); btn.textContent = '복사됨'; } catch { btn.textContent = '복사 실패'; }
-  setTimeout(() => btn.textContent = label, 1500);
+  noteBusy = false;
+  if (detailId === c.id && !$('detailPane').hidden) openDetail(c.id);
 }
-$('copyNote').onclick = () => copyText(S.note, $('copyNote'));
-$('copyTranscript').onclick = () => copyText(transcriptText(true), $('copyTranscript'));
-$('saveNote').onclick = () => {
-  const d = new Date(S.segs[0]?.t || Date.now());
-  const name = `call-note-${d.toISOString().slice(0, 10)}.md`;
-  const body = `${S.note}\n\n---\n## 콜 정보\n${S.brief}\n\n## 전체 자막\n${transcriptText(true)}\n`;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([body], { type: 'text/markdown' })); a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-};
+
+// ---------- boot ----------
+(async () => {
+  // carry over the single saved session from the previous version
+  const old = store.get('session', null);
+  if (old?.segs?.length) {
+    const c = newCallObj();
+    c.brief = old.brief || ''; c.note = old.note || '';
+    c.blocks = old.segs.map(s => ({ id: s.id + Math.random(), t: s.t, raw: s.raw, en: s.en || '', ko: s.ko || '', src: s.src === 'ai' ? 'ai' : '' }));
+    c.start = c.blocks[0].t; c.end = c.blocks.at(-1).t; c.id = c.start;
+    await db.putCall(c);
+  }
+  store.del('session');
+  const curId = store.get('curId', null);
+  cur = (curId && await db.getCall(curId)) || newCallObj();
+  cur.blocks.forEach(b => { b.open = false; });
+  store.set('curId', cur.id);
+  renderBriefChip();
+  if (cur.blocks.length) { cur.blocks.forEach(renderBlock); requestAnimationFrame(() => { livePane.scrollTop = livePane.scrollHeight; }); }
+  updateCount();
+})();
 </script>
 </body>
 </html>
